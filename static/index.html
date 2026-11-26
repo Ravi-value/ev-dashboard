@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EV Digital Twin — Live Telemetry Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased">
+
+  <!-- Top Navigation Bar -->
+  <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur sticky top-0 z-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="h-10 w-10 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-bold text-lg">
+          EV
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-semibold tracking-tight text-white">
+            EV Fleet Digital Twin Dashboard
+          </h1>
+          <p class="text-xs text-slate-400">
+            Real-Time Simulink Co-Simulation • 3-Pack Parallel V2G / G2V System
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <!-- Connection Badge -->
+        <div id="ws-badge" class="flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
+          <span id="ws-dot" class="h-2 w-2 rounded-full bg-amber-400 animate-pulse"></span>
+          <span id="ws-text">Connecting...</span>
+        </div>
+
+        <!-- Operating Mode Badge -->
+        <div id="mode-badge" class="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+          MODE: WAITING
+        </div>
+
+        <!-- CSV Export Button -->
+        <a href="/api/export/csv"
+           class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white transition shadow-sm">
+          Download CSV
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Top KPI Row -->
+    <section class="grid grid-cols-2 lg:grid-cols-6 gap-4">
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 uppercase tracking-wider">Sim Time</p>
+        <p id="kpi-time" class="text-2xl font-bold text-white mt-1">0.0 s</p>
+        <p id="kpi-timestamp" class="text-[11px] text-slate-500 mt-1">--</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 uppercase tracking-wider">Avg Fleet SoC</p>
+        <p id="kpi-soc" class="text-2xl font-bold text-emerald-400 mt-1">-- %</p>
+        <p id="kpi-soh" class="text-[11px] text-slate-400 mt-1">SoH: -- %</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 uppercase tracking-wider">DC Bus Voltage</p>
+        <p id="kpi-vdc" class="text-2xl font-bold text-sky-400 mt-1">-- V</p>
+        <p id="kpi-vbat" class="text-[11px] text-slate-400 mt-1">Vbat: -- V</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 uppercase tracking-wider">Active Power</p>
+        <p id="kpi-power" class="text-2xl font-bold text-amber-400 mt-1">-- kW</p>
+        <p id="kpi-loss" class="text-[11px] text-slate-400 mt-1">Loss: -- W</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 uppercase tracking-wider">Grid Tariff</p>
+        <p id="kpi-tariff" class="text-2xl font-bold text-purple-400 mt-1">₹--</p>
+        <p id="kpi-energy" class="text-[11px] text-slate-400 mt-1">Energy: -- kWh</p>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <p class="text-xs text-slate-400 uppercase tracking-wider">Net Balance</p>
+        <p id="kpi-net" class="text-2xl font-bold text-white mt-1">₹0.0000</p>
+        <p id="kpi-rev-cost" class="text-[11px] text-slate-400 mt-1">G2V: ₹0 | V2G: ₹0</p>
+      </div>
+    </section>
+
+    <!-- 3 Individual Battery Pack Cards -->
+    <section class="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <!-- Battery 1 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-sm font-semibold text-cyan-400">Battery Pack 1</span>
+          <span id="b1-cost" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">Cost: ₹0.0000</span>
+        </div>
+        <div class="flex items-baseline justify-between mb-1.5">
+          <span id="b1-soc" class="text-2xl font-bold text-white">-- %</span>
+          <span class="text-xs text-slate-500">State of Charge</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+          <div id="b1-bar" class="bg-cyan-400 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Battery 2 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-sm font-semibold text-emerald-400">Battery Pack 2</span>
+          <span id="b2-cost" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">Cost: ₹0.0000</span>
+        </div>
+        <div class="flex items-baseline justify-between mb-1.5">
+          <span id="b2-soc" class="text-2xl font-bold text-white">-- %</span>
+          <span class="text-xs text-slate-500">State of Charge</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+          <div id="b2-bar" class="bg-emerald-400 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+
+      <!-- Battery 3 -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-sm font-semibold text-violet-400">Battery Pack 3</span>
+          <span id="b3-cost" class="text-xs px-2 py-0.5 rounded bg-slate-800 text-slate-300">Cost: ₹0.0000</span>
+        </div>
+        <div class="flex items-baseline justify-between mb-1.5">
+          <span id="b3-soc" class="text-2xl font-bold text-white">-- %</span>
+          <span class="text-xs text-slate-500">State of Charge</span>
+        </div>
+        <div class="w-full bg-slate-800 rounded-full h-2.5 overflow-hidden">
+          <div id="b3-bar" class="bg-violet-400 h-2.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Live Charts Grid -->
+    <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- Chart 1: Multi-Battery SoC -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-slate-200">Multi-Battery State of Charge (SoC %)</h2>
+          <span class="text-xs text-slate-500">Auto-scaled</span>
+        </div>
+        <div class="h-64">
+          <canvas id="socChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 2: Power & Current -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-slate-200">Active Power (kW) & Battery Current (A)</h2>
+          <span class="text-xs text-slate-500">Live Telemetry</span>
+        </div>
+        <div class="h-64">
+          <canvas id="powerChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 3: DC Bus & Battery Voltage -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-slate-200">DC Bus Voltage vs Battery Voltage (V)</h2>
+          <span class="text-xs text-slate-500">Converter Bus</span>
+        </div>
+        <div class="h-64">
+          <canvas id="voltageChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Chart 4: Financial Economics -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex items-center justify-between mb-3">
+          <h2 class="text-sm font-semibold text-slate-200">G2V Cost, V2G Revenue & Net Balance (₹ INR)</h2>
+          <span class="text-xs text-slate-500">Dynamic Tariff</span>
+        </div>
+        <div class="h-64">
+          <canvas id="financeChart"></canvas>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
